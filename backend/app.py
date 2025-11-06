@@ -1,9 +1,10 @@
 from flask import Flask, jsonify, request
-from flask_socketio import SocketIO
+from flask_socketio import SocketIO, emit
 from flask_cors import CORS
 from backend.config import PORT, FLASK_DEBUG
 from backend.ollama_handler import OllamaHandler
 from backend.database import Database
+from backend.context_manager import ContextManager
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -11,7 +12,7 @@ app.config['SECRET_KEY'] = 'your-secret-key-change-this'
 CORS(app)
 
 # Initialize SocketIO
-socketio = SocketIO(app, cors_allowed_origins="*")
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 
 # Initialize Ollama handler
 ollama = OllamaHandler()
@@ -146,6 +147,100 @@ def delete_chat_route(chat_id):
             'success': False,
             'error': str(e)
         }), 500
+
+# ============= WEBSOCKET EVENTS =============
+
+@socketio.on('connect')
+def handle_connect():
+    """Handle client connection"""
+    print(f'✅ Client connected')
+    emit('connection_response', {'status': 'connected'})
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    """Handle client disconnection"""
+    print(f'❌ Client disconnected')
+
+@socketio.on('send_message')
+def handle_send_message(data):
+    """
+    Handle incoming message and stream AI response
+    Expected data: {
+        'chat_id': int,
+        'content': str
+    }
+    """
+    try:
+        chat_id = data.get('chat_id')
+        content = data.get('content')
+
+        if not chat_id or not content:
+            emit('error', {'message': 'Missing chat_id or content'})
+            return
+
+        # 1. Save user message to database
+        user_message = db.add_message(chat_id, 'user', content)
+
+        # Emit user message confirmation
+        emit('message_saved', {
+            'chat_id': chat_id,
+            'message': {
+                'id': user_message,
+                'role': 'user',
+                'content': content
+            }
+        })
+
+        # 2. Get chat context
+        chat = db.get_chat(chat_id)
+        messages = db.get_messages(chat_id)
+
+        # 3. Build context for LLM
+        cm = ContextManager()
+        if chat and chat.get('system_message'):
+            cm.set_system_message(chat['system_message'])
+
+        context = cm.build_context_from_db_messages(messages, chat.get('system_message'))
+
+        # 4. Stream response from Ollama
+        emit('ai_response_start', {'chat_id': chat_id})
+
+        full_response = ''
+        for token in ollama.chat_stream(context):
+            full_response += token
+            emit('message_token', {
+                'chat_id': chat_id,
+                'token': token
+            })
+
+        # 5. Save assistant response to database
+        assistant_message_id = db.add_message(
+            chat_id,
+            'assistant',
+            full_response,
+            model_used=ollama.model
+        )
+
+        # 6. Emit completion
+        emit('message_complete', {
+            'chat_id': chat_id,
+            'message': {
+                'id': assistant_message_id,
+                'role': 'assistant',
+                'content': full_response,
+                'model_used': ollama.model
+            }
+        })
+
+    except Exception as e:
+        print(f"❌ Error in send_message: {e}")
+        emit('error', {'message': str(e)})
+
+@socketio.on('test_connection')
+def handle_test_connection(data):
+    """Test WebSocket connection"""
+    print(f'🔍 Test connection: {data}')
+    emit('test_response', {'status': 'ok', 'received': data})
 
 # ============= MAIN =============
 

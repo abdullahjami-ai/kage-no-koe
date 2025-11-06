@@ -1,7 +1,40 @@
+# Python
 venv/
 __pycache__/
 *.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Database & Data
 data/*.db
 data/uploads/*
+
+# Environment
 .env
+
+# Logs
 *.log
+backend.log
+frontend.log
+
+# Frontend - Node
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# PIDs
+*.pid
+.backend.pid
+.frontend.pid
