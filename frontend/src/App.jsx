@@ -16,15 +16,16 @@ function App() {
             <h1 className="welcome-title">Kage no Koe</h1>
             <p className="welcome-subtitle-jp">影の声 - Voice of the Shadow</p>
             <p className="welcome-subtitle">LocalMind AI Assistant powered by Ollama</p>
-            <p className="phase-info">
-              🚀 Phase 4 Setup Complete! Ready for component implementation.
-            </p>
+            <div className="status-box">
+              <h3>✅ React Setup Complete!</h3>
+              <p>Ready to build UI components</p>
+            </div>
             <div className="next-steps">
-              <h3>Next Steps:</h3>
+              <h3>🚀 Next Steps:</h3>
               <ul>
-                <li>Run: <code>npm install</code> in the frontend folder</li>
-                <li>Run: <code>npm run dev</code> to start development server</li>
-                <li>Follow Phase 4 implementation guide</li>
+                <li>Backend running on <code>http://localhost:5000</code></li>
+                <li>Frontend running on <code>http://localhost:5173</code></li>
+                <li>Ready for Phase 4.8: Build UI Components</li>
               </ul>
             </div>
           </div>

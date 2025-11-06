@@ -62,17 +62,58 @@ else
     exit 1
 fi
 
-# ============= INSTALL DEPENDENCIES =============
+# ============= INSTALL PYTHON DEPENDENCIES =============
 
 echo -e "\n${YELLOW}📦 Installing/Updating Python dependencies...${NC}"
-pip install -r requirements.txt
+pip install -r requirements.txt -q
 
 if [ $? -eq 0 ]; then
-    echo -e "${GREEN}✅ Dependencies installed successfully!${NC}"
+    echo -e "${GREEN}✅ Python dependencies installed successfully!${NC}"
 else
     echo -e "${RED}❌ Failed to install dependencies${NC}"
     exit 1
 fi
+
+# ============= CHECK NODE.JS =============
+
+echo -e "\n${YELLOW}📦 Checking Node.js...${NC}"
+if ! command -v node &> /dev/null; then
+    echo -e "${RED}❌ Node.js is not installed!${NC}"
+    echo -e "${YELLOW}Please install Node.js 18+ from: https://nodejs.org${NC}"
+    exit 1
+fi
+
+NODE_VERSION=$(node --version)
+echo -e "${GREEN}✅ Node.js ${NODE_VERSION}${NC}"
+
+if ! command -v npm &> /dev/null; then
+    echo -e "${RED}❌ npm is not installed!${NC}"
+    exit 1
+fi
+
+NPM_VERSION=$(npm --version)
+echo -e "${GREEN}✅ npm ${NPM_VERSION}${NC}"
+
+# ============= INSTALL FRONTEND DEPENDENCIES =============
+
+echo -e "\n${YELLOW}📦 Checking frontend dependencies...${NC}"
+cd "${SCRIPT_DIR}/frontend"
+
+if [ ! -d "node_modules" ]; then
+    echo -e "${YELLOW}📥 Installing frontend dependencies (this may take a few minutes)...${NC}"
+    npm install
+
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✅ Frontend dependencies installed successfully!${NC}"
+    else
+        echo -e "${RED}❌ Failed to install frontend dependencies${NC}"
+        exit 1
+    fi
+else
+    echo -e "${GREEN}✅ Frontend dependencies already installed${NC}"
+fi
+
+cd "$SCRIPT_DIR"
 
 # ============= CHECK OLLAMA =============
 
@@ -160,42 +201,67 @@ for i in {1..15}; do
     fi
 done
 
-# ============= OPEN FRONTEND =============
+# ============= START FRONTEND =============
+
+echo -e "\n${BLUE}======================================${NC}"
+echo -e "${GREEN}🚀 Starting React Frontend...${NC}"
+echo -e "${BLUE}======================================${NC}\n"
+
+cd "${SCRIPT_DIR}/frontend"
+
+# Start Vite dev server in background
+npm run dev > ../frontend.log 2>&1 &
+FRONTEND_PID=$!
+
+cd "$SCRIPT_DIR"
+
+echo -e "${GREEN}✅ Frontend started (PID: $FRONTEND_PID)${NC}"
+echo -e "${YELLOW}📋 Logs: frontend.log${NC}"
+
+# Wait for frontend to be ready
+echo -e "${YELLOW}⏳ Waiting for frontend to be ready...${NC}"
+sleep 3
+
+# ============= SUMMARY =============
 
 echo -e "\n${BLUE}======================================${NC}"
 echo -e "${GREEN}✅ Kage no Koe is Running!${NC}"
 echo -e "${BLUE}======================================${NC}\n"
 
 echo -e "${GREEN}🌐 Backend:  ${NC}http://localhost:5000"
-echo -e "${GREEN}🎨 Frontend: ${NC}file://${SCRIPT_DIR}/frontend/index.html"
+echo -e "${GREEN}🎨 Frontend: ${NC}http://localhost:5173"
 echo -e "${GREEN}🤖 Ollama:   ${NC}http://localhost:11434"
 echo -e ""
-echo -e "${YELLOW}📋 Backend PID: ${BACKEND_PID}${NC}"
+echo -e "${YELLOW}📋 Process IDs:${NC}"
+echo -e "   Backend:  $BACKEND_PID"
+echo -e "   Frontend: $FRONTEND_PID"
 echo -e ""
-echo -e "${YELLOW}🛑 To stop the backend:${NC}"
-echo -e "   kill ${BACKEND_PID}"
+echo -e "${YELLOW}🛑 To stop all services:${NC}"
+echo -e "   kill $BACKEND_PID $FRONTEND_PID"
 echo -e "   or press Ctrl+C"
 echo -e ""
 
-# Save PID
+# Save PIDs
 echo $BACKEND_PID > .backend.pid
+echo $FRONTEND_PID > .frontend.pid
 
 # Try to open frontend in browser
 echo -e "${YELLOW}🌐 Opening frontend in browser...${NC}"
+sleep 2
 if command -v xdg-open &> /dev/null; then
-    xdg-open "file://${SCRIPT_DIR}/frontend/index.html" 2>/dev/null &
+    xdg-open "http://localhost:5173" 2>/dev/null &
 elif command -v open &> /dev/null; then
-    open "file://${SCRIPT_DIR}/frontend/index.html" 2>/dev/null &
+    open "http://localhost:5173" 2>/dev/null &
 else
     echo -e "${YELLOW}⚠️  Could not auto-open browser.${NC}"
-    echo -e "${YELLOW}   Open manually: file://${SCRIPT_DIR}/frontend/index.html${NC}"
+    echo -e "${YELLOW}   Open manually: http://localhost:5173${NC}"
 fi
 
 echo -e "\n${GREEN}🎉 Ready! Your AI assistant is running!${NC}"
-echo -e "${YELLOW}Press Ctrl+C to stop the backend server${NC}\n"
+echo -e "${YELLOW}Press Ctrl+C to stop all services${NC}\n"
 
-# Trap Ctrl+C to stop backend
-trap "echo -e '\n${YELLOW}🛑 Stopping backend...${NC}'; kill $BACKEND_PID 2>/dev/null; echo -e '${GREEN}✅ Stopped${NC}'; exit 0" INT TERM
+# Trap Ctrl+C to stop both services
+trap "echo -e '\n${YELLOW}🛑 Stopping services...${NC}'; kill $BACKEND_PID $FRONTEND_PID 2>/dev/null; echo -e '${GREEN}✅ All services stopped${NC}'; exit 0" INT TERM
 
 # Keep script running
-wait $BACKEND_PID
+wait
