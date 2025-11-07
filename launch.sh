@@ -94,26 +94,40 @@ fi
 NPM_VERSION=$(npm --version)
 echo -e "${GREEN}✅ npm ${NPM_VERSION}${NC}"
 
-# ============= INSTALL FRONTEND DEPENDENCIES =============
+# ============= DETECT FRONTEND TYPE =============
 
-echo -e "\n${YELLOW}📦 Checking frontend dependencies...${NC}"
-cd "${SCRIPT_DIR}/frontend"
+echo -e "\n${YELLOW}📦 Detecting frontend type...${NC}"
 
-if [ ! -d "node_modules" ]; then
-    echo -e "${YELLOW}📥 Installing frontend dependencies (this may take a few minutes)...${NC}"
-    npm install
-
-    if [ $? -eq 0 ]; then
-        echo -e "${GREEN}✅ Frontend dependencies installed successfully!${NC}"
-    else
-        echo -e "${RED}❌ Failed to install frontend dependencies${NC}"
-        exit 1
-    fi
+if [ -f "${SCRIPT_DIR}/frontend/package.json" ]; then
+    FRONTEND_TYPE="react"
+    echo -e "${GREEN}✅ Detected React frontend${NC}"
 else
-    echo -e "${GREEN}✅ Frontend dependencies already installed${NC}"
+    FRONTEND_TYPE="vanilla"
+    echo -e "${GREEN}✅ Detected Vanilla JS frontend (will be served by Flask)${NC}"
 fi
 
-cd "$SCRIPT_DIR"
+# ============= INSTALL FRONTEND DEPENDENCIES (React only) =============
+
+if [ "$FRONTEND_TYPE" = "react" ]; then
+    echo -e "\n${YELLOW}📦 Checking frontend dependencies...${NC}"
+    cd "${SCRIPT_DIR}/frontend"
+
+    if [ ! -d "node_modules" ]; then
+        echo -e "${YELLOW}📥 Installing frontend dependencies (this may take a few minutes)...${NC}"
+        npm install
+
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}✅ Frontend dependencies installed successfully!${NC}"
+        else
+            echo -e "${RED}❌ Failed to install frontend dependencies${NC}"
+            exit 1
+        fi
+    else
+        echo -e "${GREEN}✅ Frontend dependencies already installed${NC}"
+    fi
+
+    cd "$SCRIPT_DIR"
+fi
 
 # ============= CHECK OLLAMA =============
 
@@ -203,24 +217,32 @@ done
 
 # ============= START FRONTEND =============
 
-echo -e "\n${BLUE}======================================${NC}"
-echo -e "${GREEN}🚀 Starting React Frontend...${NC}"
-echo -e "${BLUE}======================================${NC}\n"
+if [ "$FRONTEND_TYPE" = "react" ]; then
+    echo -e "\n${BLUE}======================================${NC}"
+    echo -e "${GREEN}🚀 Starting React Frontend...${NC}"
+    echo -e "${BLUE}======================================${NC}\n"
 
-cd "${SCRIPT_DIR}/frontend"
+    cd "${SCRIPT_DIR}/frontend"
 
-# Start Vite dev server in background
-npm run dev > ../frontend.log 2>&1 &
-FRONTEND_PID=$!
+    # Start Vite dev server in background
+    npm run dev > ../frontend.log 2>&1 &
+    FRONTEND_PID=$!
 
-cd "$SCRIPT_DIR"
+    cd "$SCRIPT_DIR"
 
-echo -e "${GREEN}✅ Frontend started (PID: $FRONTEND_PID)${NC}"
-echo -e "${YELLOW}📋 Logs: frontend.log${NC}"
+    echo -e "${GREEN}✅ Frontend started (PID: $FRONTEND_PID)${NC}"
+    echo -e "${YELLOW}📋 Logs: frontend.log${NC}"
 
-# Wait for frontend to be ready
-echo -e "${YELLOW}⏳ Waiting for frontend to be ready...${NC}"
-sleep 3
+    # Wait for frontend to be ready
+    echo -e "${YELLOW}⏳ Waiting for frontend to be ready...${NC}"
+    sleep 3
+else
+    echo -e "\n${BLUE}======================================${NC}"
+    echo -e "${GREEN}✅ Vanilla JS Frontend Ready${NC}"
+    echo -e "${BLUE}======================================${NC}\n"
+    echo -e "${GREEN}📂 Static files will be served by Flask${NC}"
+    FRONTEND_PID=""
+fi
 
 # ============= SUMMARY =============
 
@@ -228,40 +250,62 @@ echo -e "\n${BLUE}======================================${NC}"
 echo -e "${GREEN}✅ Kage no Koe is Running!${NC}"
 echo -e "${BLUE}======================================${NC}\n"
 
+if [ "$FRONTEND_TYPE" = "react" ]; then
+    FRONTEND_URL="http://localhost:5173"
+else
+    FRONTEND_URL="http://localhost:5000"
+fi
+
 echo -e "${GREEN}🌐 Backend:  ${NC}http://localhost:5000"
-echo -e "${GREEN}🎨 Frontend: ${NC}http://localhost:5173"
+echo -e "${GREEN}🎨 Frontend: ${NC}${FRONTEND_URL}"
 echo -e "${GREEN}🤖 Ollama:   ${NC}http://localhost:11434"
 echo -e ""
 echo -e "${YELLOW}📋 Process IDs:${NC}"
 echo -e "   Backend:  $BACKEND_PID"
-echo -e "   Frontend: $FRONTEND_PID"
+if [ -n "$FRONTEND_PID" ]; then
+    echo -e "   Frontend: $FRONTEND_PID"
+fi
 echo -e ""
+
+# Build stop command
+if [ -n "$FRONTEND_PID" ]; then
+    STOP_CMD="kill $BACKEND_PID $FRONTEND_PID"
+else
+    STOP_CMD="kill $BACKEND_PID"
+fi
+
 echo -e "${YELLOW}🛑 To stop all services:${NC}"
-echo -e "   kill $BACKEND_PID $FRONTEND_PID"
+echo -e "   $STOP_CMD"
 echo -e "   or press Ctrl+C"
 echo -e ""
 
 # Save PIDs
 echo $BACKEND_PID > .backend.pid
-echo $FRONTEND_PID > .frontend.pid
+if [ -n "$FRONTEND_PID" ]; then
+    echo $FRONTEND_PID > .frontend.pid
+fi
 
 # Try to open frontend in browser
 echo -e "${YELLOW}🌐 Opening frontend in browser...${NC}"
 sleep 2
 if command -v xdg-open &> /dev/null; then
-    xdg-open "http://localhost:5173" 2>/dev/null &
+    xdg-open "${FRONTEND_URL}" 2>/dev/null &
 elif command -v open &> /dev/null; then
-    open "http://localhost:5173" 2>/dev/null &
+    open "${FRONTEND_URL}" 2>/dev/null &
 else
     echo -e "${YELLOW}⚠️  Could not auto-open browser.${NC}"
-    echo -e "${YELLOW}   Open manually: http://localhost:5173${NC}"
+    echo -e "${YELLOW}   Open manually: ${FRONTEND_URL}${NC}"
 fi
 
 echo -e "\n${GREEN}🎉 Ready! Your AI assistant is running!${NC}"
 echo -e "${YELLOW}Press Ctrl+C to stop all services${NC}\n"
 
-# Trap Ctrl+C to stop both services
-trap "echo -e '\n${YELLOW}🛑 Stopping services...${NC}'; kill $BACKEND_PID $FRONTEND_PID 2>/dev/null; echo -e '${GREEN}✅ All services stopped${NC}'; exit 0" INT TERM
+# Trap Ctrl+C to stop all services
+if [ -n "$FRONTEND_PID" ]; then
+    trap "echo -e '\n${YELLOW}🛑 Stopping services...${NC}'; kill $BACKEND_PID $FRONTEND_PID 2>/dev/null; echo -e '${GREEN}✅ All services stopped${NC}'; exit 0" INT TERM
+else
+    trap "echo -e '\n${YELLOW}🛑 Stopping services...${NC}'; kill $BACKEND_PID 2>/dev/null; echo -e '${GREEN}✅ All services stopped${NC}'; exit 0" INT TERM
+fi
 
 # Keep script running
 wait

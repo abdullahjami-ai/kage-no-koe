@@ -1,13 +1,16 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_from_directory
 from flask_socketio import SocketIO, emit
 from flask_cors import CORS
 from backend.config import PORT, FLASK_DEBUG
 from backend.ollama_handler import OllamaHandler
 from backend.database import Database
 from backend.context_manager import ContextManager
+import os
 
 # Initialize Flask app
-app = Flask(__name__)
+# Configure to serve static files from frontend directory
+frontend_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'frontend')
+app = Flask(__name__, static_folder=frontend_dir, static_url_path='')
 app.config['SECRET_KEY'] = 'your-secret-key-change-this'
 CORS(app)
 
@@ -19,6 +22,13 @@ ollama = OllamaHandler()
 
 # Initialize Database
 db = Database()
+
+# ============= FRONTEND ROUTES =============
+
+@app.route('/')
+def serve_frontend():
+    """Serve the frontend index.html"""
+    return send_from_directory(app.static_folder, 'index.html')
 
 # ============= BASIC ROUTES =============
 
