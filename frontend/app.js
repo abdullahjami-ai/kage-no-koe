@@ -6,28 +6,114 @@
 // API Base URL
 const API_BASE = 'http://localhost:5000';
 
+// WebSocket connection
+let socket = null;
+let streamingMessage = '';
+
 // ============= INITIALIZATION =============
 
 document.addEventListener('DOMContentLoaded', () => {
     console.log('🧠 Kage no Koe - Initializing...');
-    
+
     // Initialize UI
     initializeUI();
-    
+
     // Setup event listeners
     setupEventListeners();
-    
+
     // Setup state observers
     setupStateObservers();
-    
+
+    // Connect WebSocket
+    connectWebSocket();
+
     // Check backend connection
     checkHealth();
-    
+
     // Load chats
     loadChats();
-    
+
     console.log('✅ Initialization complete');
 });
+
+// ============= WEBSOCKET CONNECTION =============
+
+function connectWebSocket() {
+    console.log('🔌 Connecting to WebSocket...');
+
+    socket = io(API_BASE);
+
+    socket.on('connect', () => {
+        console.log('✅ WebSocket connected');
+        appState.set('connected', true);
+        updateConnectionStatus(true);
+    });
+
+    socket.on('disconnect', () => {
+        console.log('❌ WebSocket disconnected');
+        appState.set('connected', false);
+        updateConnectionStatus(false);
+    });
+
+    socket.on('error', (error) => {
+        console.error('❌ WebSocket error:', error);
+    });
+
+    // Handle AI response events
+    socket.on('ai_response_start', (data) => {
+        console.log('🤖 AI response starting...');
+        streamingMessage = '';
+        appState.setTyping(true);
+    });
+
+    socket.on('message_token', (data) => {
+        streamingMessage += data.token;
+
+        // Update or add streaming message in UI
+        const messages = appState.get('messages');
+        const lastMessage = messages[messages.length - 1];
+
+        if (lastMessage && lastMessage.role === 'assistant' && lastMessage.streaming) {
+            // Update existing streaming message
+            lastMessage.content = streamingMessage;
+            appState.set('messages', [...messages]);
+        } else {
+            // Add new streaming message
+            appState.addMessage({
+                role: 'assistant',
+                content: streamingMessage,
+                streaming: true,
+                timestamp: new Date().toISOString()
+            });
+        }
+    });
+
+    socket.on('message_complete', (data) => {
+        console.log('✅ AI response complete');
+        appState.setTyping(false);
+
+        // Replace streaming message with final message
+        const messages = appState.get('messages');
+        const lastMessage = messages[messages.length - 1];
+
+        if (lastMessage && lastMessage.streaming) {
+            lastMessage.content = data.message.content;
+            lastMessage.streaming = false;
+            lastMessage.id = data.message.id;
+            appState.set('messages', [...messages]);
+        }
+
+        streamingMessage = '';
+    });
+
+    socket.on('message_saved', (data) => {
+        console.log('💾 Message saved to database');
+    });
+
+    socket.on('connection_response', (data) => {
+        console.log('🔗 Connection response:', data);
+    });
+}
 
 // ============= UI INITIALIZATION =============
 
@@ -36,7 +122,7 @@ function initializeUI() {
     const theme = appState.get('theme');
     document.body.className = `theme-${theme}`;
     updateThemeIcon(theme);
-    
+
     // Set initial UI state
     updateSidebarState();
 }
@@ -238,6 +324,11 @@ function setupStateObservers() {
     appState.subscribe('chats', (chats) => {
         renderChatsList(chats);
     });
+
+    // Files update
+    appState.subscribe('files', (files) => {
+        renderFiles(files);
+    });
 }
 
 // ============= UI UPDATE FUNCTIONS =============
@@ -375,45 +466,45 @@ async function loadChatMessages(chatId) {
 async function sendMessage() {
     const messageInput = document.getElementById('messageInput');
     const message = messageInput.value.trim();
-    
+
     if (!message) return;
-    
-    const currentChat = appState.get('currentChat');
-    
+
+    let currentChat = appState.get('currentChat');
+
     // If no chat is active, create one
     if (!currentChat) {
         await createNewChat();
         // Wait a bit for chat to be created
         await new Promise(resolve => setTimeout(resolve, 100));
+        currentChat = appState.get('currentChat');
     }
-    
+
+    if (!currentChat) {
+        console.error('❌ No chat available');
+        return;
+    }
+
     // Clear input
     messageInput.value = '';
     messageInput.style.height = 'auto';
     document.getElementById('sendBtn').disabled = true;
-    
+
     // Add user message to UI
     appState.addMessage({
         role: 'user',
         content: message,
         timestamp: new Date().toISOString()
     });
-    
+
     // Show typing indicator
     appState.setTyping(true);
-    
-    // TODO: Send to backend in Phase 4
-    console.log('📤 Message to send:', message);
-    
-    // Temporary: Simulate response
-    setTimeout(() => {
-        appState.setTyping(false);
-        appState.addMessage({
-            role: 'assistant',
-            content: 'This is a placeholder response. Backend integration coming in Phase 4!',
-            timestamp: new Date().toISOString()
-        });
-    }, 1000);
+
+    // Send to backend via WebSocket
+    console.log('📤 Sending message via WebSocket...');
+    socket.emit('send_message', {
+        chat_id: currentChat,
+        content: message
+    });
 }
 
 async function loadModels() {
@@ -439,21 +530,56 @@ function saveSettings() {
     appState.closeModal();
 }
 
-function handleFileSelect(event) {
+async function handleFileSelect(event) {
     const files = Array.from(event.target.files);
-    
-    files.forEach(file => {
-        appState.addFile({
-            name: file.name,
-            size: file.size,
-            type: file.type,
-            file: file
-        });
-    });
-    
-    console.log('📎 Files attached:', files.map(f => f.name));
-    
-    // TODO: Upload files in Phase 5
+
+    const currentChat = appState.get('currentChat');
+    if (!currentChat) {
+        console.error('❌ No active chat for file upload');
+        alert('Please create a chat first before uploading files');
+        return;
+    }
+
+    console.log('📎 Uploading files:', files.map(f => f.name));
+
+    for (const file of files) {
+        try {
+            // Create FormData for file upload
+            const formData = new FormData();
+            formData.append('file', file);
+
+            // Upload to backend
+            const response = await fetch(`${API_BASE}/api/chats/${currentChat}/files`, {
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                console.log('✅ File uploaded:', file.name);
+
+                // Add file to state
+                appState.addFile({
+                    id: data.file.id,
+                    name: data.file.filename,
+                    size: data.file.file_size,
+                    type: data.file.file_type,
+                    word_count: data.file.word_count,
+                    summary: data.file.summary
+                });
+            } else {
+                console.error('❌ File upload failed:', data.error);
+                alert(`Failed to upload ${file.name}: ${data.error}`);
+            }
+        } catch (error) {
+            console.error('❌ File upload error:', error);
+            alert(`Error uploading ${file.name}`);
+        }
+    }
+
+    // Clear file input
+    event.target.value = '';
 }
 
 // ============= RENDER FUNCTIONS =============
@@ -528,18 +654,52 @@ function renderMessages(messages) {
 function renderModels(models, currentModel) {
     const modelsList = document.getElementById('modelsList');
     if (!modelsList) return;
-    
+
     if (models.length === 0) {
         modelsList.innerHTML = '<p class="text-muted">No models found</p>';
         return;
     }
-    
+
     modelsList.innerHTML = models.map(model => `
         <div class="model-item ${model.name === currentModel ? 'active' : ''}">
             <div class="model-name">${escapeHtml(model.name)}</div>
             <div class="model-size">${formatBytes(model.size)}</div>
         </div>
     `).join('');
+}
+
+function renderFiles(files) {
+    const attachedFilesContainer = document.getElementById('attachedFiles');
+    if (!attachedFilesContainer) return;
+
+    if (files.length === 0) {
+        attachedFilesContainer.style.display = 'none';
+        attachedFilesContainer.innerHTML = '';
+        return;
+    }
+
+    attachedFilesContainer.style.display = 'flex';
+    attachedFilesContainer.innerHTML = files.map(file => `
+        <div class="file-chip" data-file-id="${file.id || ''}">
+            <span class="file-icon">📄</span>
+            <div class="file-info">
+                <div class="file-name">${escapeHtml(file.name)}</div>
+                <div class="file-size">${formatBytes(file.size)}${file.word_count ? ` • ${file.word_count} words` : ''}</div>
+            </div>
+            <button class="file-remove" onclick="removeFile(${file.id || 0})" title="Remove file">
+                <span>×</span>
+            </button>
+        </div>
+    `).join('');
+}
+
+function removeFile(fileId) {
+    const files = appState.get('files');
+    const updatedFiles = files.filter(f => f.id !== fileId);
+    appState.set('files', updatedFiles);
+
+    // TODO: Also delete from backend
+    console.log('🗑️ File removed:', fileId);
 }
 
 // ============= UTILITY FUNCTIONS =============

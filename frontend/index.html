@@ -116,12 +116,17 @@
 
             <!-- Input Area -->
             <div class="input-area">
+                <!-- Attached Files Display -->
+                <div class="attached-files" id="attachedFiles" style="display: none;">
+                    <!-- Files will be displayed here -->
+                </div>
+
                 <div class="input-container">
                     <!-- File Upload Button -->
                     <button class="input-btn" id="attachFileBtn" title="Attach File">
                         <span>📎</span>
                     </button>
-                    <input type="file" id="fileInput" style="display: none;" multiple>
+                    <input type="file" id="fileInput" style="display: none;" multiple accept=".pdf,.docx,.doc,.xlsx,.xls,.txt,.md,.png,.jpg,.jpeg">
 
                     <!-- Text Input -->
                     <textarea 
@@ -194,6 +199,7 @@
     </div>
 
     <!-- Scripts -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <script src="state.js"></script>
     <script src="app.js"></script>
 </body>
