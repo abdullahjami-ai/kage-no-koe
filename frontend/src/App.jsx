@@ -1,35 +1,33 @@
 /**
  * Main App Component for Kage no Koe
+ * ChatGPT-style interface with React
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import { AppProvider } from './context/AppContext';
+import Sidebar from './components/Sidebar/Sidebar';
+import ChatArea from './components/Chat/ChatArea';
+import './theme.css';
 import './App.css';
 
 function App() {
+  const [showSettings, setShowSettings] = useState(false);
+  const [showModels, setShowModels] = useState(false);
+
   return (
     <AppProvider>
       <div className="app-container">
-        <div className="welcome-screen">
-          <div className="welcome-content">
-            <div className="welcome-icon">👤</div>
-            <h1 className="welcome-title">Kage no Koe</h1>
-            <p className="welcome-subtitle-jp">影の声 - Voice of the Shadow</p>
-            <p className="welcome-subtitle">LocalMind AI Assistant powered by Ollama</p>
-            <div className="status-box">
-              <h3>✅ React Setup Complete!</h3>
-              <p>Ready to build UI components</p>
-            </div>
-            <div className="next-steps">
-              <h3>🚀 Next Steps:</h3>
-              <ul>
-                <li>Backend running on <code>http://localhost:5000</code></li>
-                <li>Frontend running on <code>http://localhost:5173</code></li>
-                <li>Ready for Phase 4.8: Build UI Components</li>
-              </ul>
-            </div>
-          </div>
-        </div>
+        <Sidebar
+          onSettingsClick={() => setShowSettings(true)}
+          onModelsClick={() => setShowModels(true)}
+        />
+        <ChatArea
+          onSettingsClick={() => setShowSettings(true)}
+        />
+
+        {/* TODO: Add Settings Modal */}
+        {/* TODO: Add Models Modal */}
+        {/* TODO: Add Import/Export Modal */}
       </div>
     </AppProvider>
   );

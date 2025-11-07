@@ -1,0 +1,122 @@
+/* ============================================
+   KAGE NO KOE - THEME SYSTEM
+   ChatGPT-Style with Dark/Light Themes
+   ============================================ */
+
+:root {
+  /* Dark Theme Colors (Default) */
+  --bg-page: #343541;
+  --bg-sidebar: #202123;
+  --bg-chat-hover: #2a2b32;
+  --bg-message-user: #343541;
+  --bg-message-ai: #444654;
+  --bg-input: #40414f;
+  --border-color: #565869;
+
+  /* Text Colors */
+  --text-primary: #ececf1;
+  --text-secondary: #c5c5d2;
+  --text-muted: #8e8ea0;
+
+  /* Accent Colors */
+  --accent-primary: linear-gradient(135deg, #f65cf6 0%, #bb28c0 100%);
+  --accent-gradient-start: #f65cf6;
+  --accent-gradient-end: #bb28c0;
+  --color-success: #10a37f;
+  --color-warning: #ff9800;
+  --color-error: #ef4444;
+
+  /* Spacing (8px grid) */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;
+  --space-2xl: 32px;
+
+  /* Typography Scale */
+  --font-xs: 10px;
+  --font-sm: 12px;
+  --font-md: 14px;
+  --font-base: 16px;
+  --font-lg: 18px;
+  --font-xl: 24px;
+
+  /* Layout */
+  --sidebar-width: 260px;
+  --header-height: 60px;
+  --input-height: 80px;
+  --message-max-width: 750px;
+
+  /* Animations */
+  --transition-fast: 0.2s ease;
+  --transition-base: 0.3s ease;
+  --transition-slow: 0.5s ease;
+}
+
+/* Light Theme Override */
+.theme-light {
+  --bg-page: #ffffff;
+  --bg-sidebar: #f7f7f8;
+  --bg-chat-hover: #ececf1;
+  --bg-message-user: #f7f7f8;
+  --bg-message-ai: #ffffff;
+  --bg-input: #ffffff;
+  --border-color: #d9d9e3;
+
+  --text-primary: #343541;
+  --text-secondary: #565869;
+  --text-muted: #8e8ea0;
+}
+
+/* Global Styles */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
+  background-color: var(--bg-page);
+  color: var(--text-primary);
+  transition: background-color var(--transition-base), color var(--transition-base);
+  overflow: hidden;
+}
+
+#root {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* Utility Classes */
+.gradient-text {
+  background: var(--accent-primary);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.gradient-bg {
+  background: var(--accent-primary);
+}
