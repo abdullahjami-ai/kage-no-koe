@@ -380,32 +380,42 @@ def handle_send_message(data):
         if chat and chat.get('system_message'):
             cm.set_system_message(chat['system_message'])
 
-        context = cm.build_context_from_db_messages(messages, chat.get('system_message'))
+        # Add conversation messages to context manager
+        for msg in messages[-20:]:  # Keep last 20 messages
+            cm.add_message(msg['role'], msg['content'])
 
         # 3.5. Add file context if files are attached
         files = db.get_files(chat_id)
         if files:
+            print(f"📎 Adding {len(files)} file(s) to context")
             # Add file contents to context
             for file in files:
                 if file.get('processed_content'):
+                    print(f"   - {file['filename']} ({len(file['processed_content'])} chars)")
                     cm.add_file_context(
                         filename=file['filename'],
                         content=file['processed_content'],
                         max_chars=2000  # Limit context size per file
                     )
-            # Rebuild context with files
-            context = cm.get_context_for_llm()
+
+        # Get final context with both messages and files
+        context = cm.get_context_for_llm()
+        print(f"📝 Context size: {len(context)} messages, ~{cm.get_context_size()} tokens")
 
         # 4. Stream response from Ollama
         emit('ai_response_start', {'chat_id': chat_id})
 
         full_response = ''
-        for token in ollama.chat_stream(context):
-            full_response += token
-            emit('message_token', {
-                'chat_id': chat_id,
-                'token': token
-            })
+        try:
+            for token in ollama.chat_stream(context):
+                full_response += token
+                emit('message_token', {
+                    'chat_id': chat_id,
+                    'token': token
+                })
+        except Exception as stream_error:
+            print(f"❌ Streaming error: {stream_error}")
+            raise
 
         # 5. Save assistant response to database
         assistant_message_id = db.add_message(
