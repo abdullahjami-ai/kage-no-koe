@@ -1,6 +1,7 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_from_directory
 from flask_socketio import SocketIO, emit
 from flask_cors import CORS
+from pathlib import Path
 from backend.config import PORT, FLASK_DEBUG, UPLOAD_FOLDER, MAX_FILE_SIZE_BYTES
 from backend.ollama_handler import OllamaHandler
 from backend.database import Database
@@ -12,6 +13,9 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key-change-this'
 app.config['MAX_CONTENT_LENGTH'] = MAX_FILE_SIZE_BYTES
 CORS(app)
+
+# Frontend path
+FRONTEND_DIR = Path(__file__).parent.parent / 'frontend'
 
 # Initialize SocketIO
 socketio = SocketIO(app, cors_allowed_origins="*")
@@ -27,6 +31,18 @@ context_manager = ContextManager(db)
 
 # Initialize File Processor
 file_processor = FileProcessor(UPLOAD_FOLDER, MAX_FILE_SIZE_BYTES)
+
+# ============= FRONTEND ROUTES =============
+
+@app.route('/')
+def index():
+    """Serve the frontend"""
+    return send_from_directory(FRONTEND_DIR, 'index.html')
+
+@app.route('/<path:path>')
+def serve_static(path):
+    """Serve static frontend files"""
+    return send_from_directory(FRONTEND_DIR, path)
 
 # ============= BASIC ROUTES =============
 
