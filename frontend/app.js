@@ -6,26 +6,101 @@
 // API Base URL
 const API_BASE = 'http://localhost:5000';
 
+// ============= SOCKETIO INITIALIZATION =============
+
+let socket = null;
+let currentStreamingMessage = '';
+
+function initializeSocket() {
+    socket = io(API_BASE);
+
+    socket.on('connect', () => {
+        console.log('✅ SocketIO connected');
+        appState.set('connected', true);
+    });
+
+    socket.on('disconnect', () => {
+        console.log('❌ SocketIO disconnected');
+        appState.set('connected', false);
+    });
+
+    socket.on('connection_response', (data) => {
+        console.log('🔌 Connection response:', data);
+    });
+
+    socket.on('message_start', (data) => {
+        console.log('📨 Message streaming started');
+        currentStreamingMessage = '';
+        appState.setTyping(true);
+    });
+
+    socket.on('message_token', (data) => {
+        currentStreamingMessage += data.token;
+
+        // Update the assistant message in real-time
+        const messages = appState.get('messages');
+        const lastMessage = messages[messages.length - 1];
+
+        if (lastMessage && lastMessage.role === 'assistant') {
+            // Update existing message
+            lastMessage.content = currentStreamingMessage;
+            appState.set('messages', [...messages]);
+        } else {
+            // Add new assistant message
+            appState.addMessage({
+                role: 'assistant',
+                content: currentStreamingMessage,
+                timestamp: new Date().toISOString()
+            });
+        }
+    });
+
+    socket.on('message_complete', (data) => {
+        console.log('✅ Message complete');
+        appState.setTyping(false);
+        currentStreamingMessage = '';
+
+        // Reload chat to sync with backend
+        const currentChat = appState.get('currentChat');
+        if (currentChat) {
+            loadChatMessages(currentChat);
+        }
+    });
+
+    socket.on('error', (data) => {
+        console.error('❌ SocketIO error:', data.error);
+        appState.setTyping(false);
+        appState.addMessage({
+            role: 'assistant',
+            content: `Error: ${data.error}`,
+            timestamp: new Date().toISOString()
+        });
+    });
+}
+
 // ============= INITIALIZATION =============
 
 document.addEventListener('DOMContentLoaded', () => {
     console.log('🧠 Kage no Koe - Initializing...');
-    
+
     // Initialize UI
     initializeUI();
-    
+
+    // Initialize SocketIO
+    initializeSocket();
+
     // Setup event listeners
     setupEventListeners();
-    
+
     // Setup state observers
     setupStateObservers();
-    
+
     // Check backend connection
     checkHealth();
-    
+
     // Load chats
     loadChats();
-    
+
     console.log('✅ Initialization complete');
 });
 
@@ -375,45 +450,47 @@ async function loadChatMessages(chatId) {
 async function sendMessage() {
     const messageInput = document.getElementById('messageInput');
     const message = messageInput.value.trim();
-    
+
     if (!message) return;
-    
-    const currentChat = appState.get('currentChat');
-    
+
+    let currentChat = appState.get('currentChat');
+
     // If no chat is active, create one
     if (!currentChat) {
         await createNewChat();
         // Wait a bit for chat to be created
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise(resolve => setTimeout(resolve, 200));
+        currentChat = appState.get('currentChat');
     }
-    
+
     // Clear input
     messageInput.value = '';
     messageInput.style.height = 'auto';
     document.getElementById('sendBtn').disabled = true;
-    
+
     // Add user message to UI
     appState.addMessage({
         role: 'user',
         content: message,
         timestamp: new Date().toISOString()
     });
-    
-    // Show typing indicator
-    appState.setTyping(true);
-    
-    // TODO: Send to backend in Phase 4
-    console.log('📤 Message to send:', message);
-    
-    // Temporary: Simulate response
-    setTimeout(() => {
-        appState.setTyping(false);
+
+    // Send via SocketIO for streaming response
+    console.log('📤 Sending message via SocketIO:', message);
+
+    if (socket && socket.connected) {
+        socket.emit('send_message', {
+            chat_id: currentChat,
+            message: message
+        });
+    } else {
+        console.error('❌ SocketIO not connected');
         appState.addMessage({
             role: 'assistant',
-            content: 'This is a placeholder response. Backend integration coming in Phase 4!',
+            content: 'Error: Not connected to server. Please refresh the page.',
             timestamp: new Date().toISOString()
         });
-    }, 1000);
+    }
 }
 
 async function loadModels() {
@@ -439,21 +516,57 @@ function saveSettings() {
     appState.closeModal();
 }
 
-function handleFileSelect(event) {
+async function handleFileSelect(event) {
     const files = Array.from(event.target.files);
-    
-    files.forEach(file => {
-        appState.addFile({
-            name: file.name,
-            size: file.size,
-            type: file.type,
-            file: file
-        });
-    });
-    
-    console.log('📎 Files attached:', files.map(f => f.name));
-    
-    // TODO: Upload files in Phase 5
+    const currentChat = appState.get('currentChat');
+
+    if (!currentChat) {
+        alert('Please create or select a chat first');
+        return;
+    }
+
+    for (const file of files) {
+        console.log(`📎 Uploading file: ${file.name}`);
+
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const response = await fetch(`${API_BASE}/api/chats/${currentChat}/files`, {
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                console.log(`✅ File uploaded: ${file.name}`);
+
+                // Add system message to chat
+                appState.addMessage({
+                    role: 'system',
+                    content: `📎 File uploaded: ${file.name} (${formatFileSize(file.size)})`,
+                    timestamp: new Date().toISOString()
+                });
+            } else {
+                console.error(`❌ Upload failed: ${data.error}`);
+                alert(`Failed to upload ${file.name}: ${data.error}`);
+            }
+        } catch (error) {
+            console.error(`❌ Upload error:`, error);
+            alert(`Error uploading ${file.name}: ${error.message}`);
+        }
+    }
+
+    // Clear file input
+    event.target.value = '';
+}
+
+// Helper function to format file sizes
+function formatFileSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
 // ============= RENDER FUNCTIONS =============
