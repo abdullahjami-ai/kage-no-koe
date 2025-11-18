@@ -144,14 +144,44 @@ def get_chat(chat_id):
                 'success': False,
                 'error': 'Chat not found'
             }), 404
-        
+
         messages = db.get_messages(chat_id)
         chat['messages'] = messages
-        
+
         return jsonify({
             'success': True,
             'chat': chat
         })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/chats/<int:chat_id>', methods=['PUT'])
+def update_chat(chat_id):
+    """Update a chat (e.g., rename)"""
+    try:
+        data = request.json
+        title = data.get('title')
+
+        if not title:
+            return jsonify({
+                'success': False,
+                'error': 'Title is required'
+            }), 400
+
+        success = db.update_chat(chat_id, title=title)
+
+        if success:
+            return jsonify({
+                'success': True
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Chat not found'
+            }), 404
     except Exception as e:
         return jsonify({
             'success': False,

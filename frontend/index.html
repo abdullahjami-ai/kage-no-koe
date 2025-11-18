@@ -12,18 +12,24 @@
         
         <!-- Sidebar -->
         <aside class="sidebar" id="sidebar">
-            <!-- Sidebar Header -->
+            <!-- Sidebar Header with Toggle -->
             <div class="sidebar-header">
-                <h1 class="app-title">
-                    <span class="app-icon">👤</span>
-                    <div class="title-text">
-                        <span class="main-title">Kage no Koe</span>
-                        <span class="subtitle">LocalMind</span>
-                    </div>
-                </h1>
-                <button class="new-chat-btn" id="newChatBtn" title="New Chat">
-                    <span>+</span> New Chat
-                </button>
+                <div class="sidebar-header-top">
+                    <button class="icon-btn toggle-sidebar-btn" id="toggleSidebarBtn" title="Toggle Sidebar">
+                        <span>☰</span>
+                    </button>
+                    <button class="new-chat-btn" id="newChatBtn" title="New Chat">
+                        <span class="plus-icon">+</span>
+                        <span class="btn-text">New chat</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Projects Section -->
+            <div class="projects-section">
+                <div class="section-header">
+                    <span class="section-title">Recent</span>
+                </div>
             </div>
 
             <!-- Chat List -->
@@ -53,11 +59,8 @@
             <!-- Header -->
             <header class="chat-header">
                 <div class="header-left">
-                    <button class="icon-btn" id="toggleSidebarBtn" title="Toggle Sidebar">
-                        <span>☰</span>
-                    </button>
                     <div class="chat-title-area">
-                        <h2 class="chat-title" id="currentChatTitle">New Chat</h2>
+                        <h2 class="chat-title" id="currentChatTitle">Kage no Koe</h2>
                         <span class="chat-model" id="currentChatModel">llama3.2:1b</span>
                     </div>
                 </div>

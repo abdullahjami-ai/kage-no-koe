@@ -463,10 +463,11 @@ async function sendMessage() {
         currentChat = appState.get('currentChat');
     }
 
-    // Clear input
+    // Clear input and refocus for next message
     messageInput.value = '';
     messageInput.style.height = 'auto';
     document.getElementById('sendBtn').disabled = true;
+    messageInput.focus();
 
     // Add user message to UI
     appState.addMessage({
@@ -586,18 +587,40 @@ function renderChatsList(chats) {
     }
     
     chatList.innerHTML = chats.map(chat => `
-        <div class="chat-item ${chat.id === appState.get('currentChat') ? 'active' : ''}" 
+        <div class="chat-item ${chat.id === appState.get('currentChat') ? 'active' : ''}"
              data-chat-id="${chat.id}">
-            <div class="chat-item-title">${escapeHtml(chat.title)}</div>
-            <div class="chat-item-preview">${formatDate(chat.updated_at)}</div>
+            <div class="chat-item-content">
+                <div class="chat-item-title">${escapeHtml(chat.title)}</div>
+                <div class="chat-item-preview">${formatDate(chat.updated_at)}</div>
+            </div>
+            <div class="chat-item-actions">
+                <button class="chat-item-action rename-chat" title="Rename">✏️</button>
+                <button class="chat-item-action delete-chat" title="Delete">🗑️</button>
+            </div>
         </div>
     `).join('');
-    
+
     // Add click listeners
     chatList.querySelectorAll('.chat-item').forEach(item => {
-        item.addEventListener('click', () => {
-            const chatId = parseInt(item.dataset.chatId);
+        const chatId = parseInt(item.dataset.chatId);
+
+        // Click on chat item to select
+        item.addEventListener('click', (e) => {
+            // Don't select if clicking on action buttons
+            if (e.target.closest('.chat-item-action')) return;
             appState.setCurrentChat(chatId);
+        });
+
+        // Rename button
+        item.querySelector('.rename-chat').addEventListener('click', (e) => {
+            e.stopPropagation();
+            renameChat(chatId);
+        });
+
+        // Delete button
+        item.querySelector('.delete-chat').addEventListener('click', (e) => {
+            e.stopPropagation();
+            deleteChatConfirm(chatId);
         });
     });
 }
@@ -685,4 +708,59 @@ function formatBytes(bytes) {
     const sizes = ['B', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+}
+
+// ============= CHAT ACTIONS =============
+
+async function renameChat(chatId) {
+    const chat = appState.get('chats').find(c => c.id === chatId);
+    if (!chat) return;
+
+    const newTitle = prompt('Rename chat:', chat.title);
+    if (!newTitle || newTitle.trim() === '' || newTitle === chat.title) return;
+
+    try {
+        const response = await fetch(`${API_BASE}/api/chats/${chatId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title: newTitle.trim() })
+        });
+
+        if (response.ok) {
+            // Reload chats to reflect change
+            await loadChats();
+        } else {
+            alert('Failed to rename chat');
+        }
+    } catch (error) {
+        console.error('Error renaming chat:', error);
+        alert('Error renaming chat');
+    }
+}
+
+async function deleteChatConfirm(chatId) {
+    if (!confirm('Are you sure you want to delete this chat?')) return;
+
+    try {
+        const response = await fetch(`${API_BASE}/api/chats/${chatId}`, {
+            method: 'DELETE'
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            // If deleted chat was active, clear it
+            if (appState.get('currentChat') === chatId) {
+                appState.setCurrentChat(null);
+            }
+
+            // Reload chats
+            await loadChats();
+        } else {
+            alert('Failed to delete chat');
+        }
+    } catch (error) {
+        console.error('Error deleting chat:', error);
+        alert('Error deleting chat');
+    }
 }
